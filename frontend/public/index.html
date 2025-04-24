@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova AI Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="nav-bar">
+            <button class="nav-item" id="theme-toggle">Toggle Theme</button>
+            <button class="nav-item" id="fullscreen-toggle">Toggle Fullscreen</button>
+            <button class="nav-item" id="mood-toggle">Mood</button>
+        </nav>
+
+        <main class="main-content">
+            <div class="circle idle" id="status-circle">
+                <span>Ready</span>
+            </div>
+
+            <div class="text-display">
+                <div class="subtitle" id="subtitle">Press the yellow button or say 'Nova' to start</div>
+                <div class="user-transcript" id="user-transcript">You: Oh, no.</div>
+                <div class="response" id="response">Nova: Hello, I'm Nova. Ready to help! ⭐</div>
+                <div class="debug" id="debug">Listening started...</div>
+                <div class="mood-indicator" id="mood-indicator">Mood: Neutral</div>
+            </div>
+
+            <div class="button-container">
+                <button class="button square" id="square-button"></button>
+                <button class="button circle" id="circle-button"></button>
+                <button class="button x" id="x-button"></button>
+            </div>
+
+            <div class="processing-time" id="processing-time">Processing: 0ms</div>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
+
+    <div class="subtitle-display" id="subtitle-display"></div>
+
+    <script>
+        class MoodEngine {
+            constructor() {
+                this.mood = "neutral";
+                this.lastUpdate = Date.now();
+                this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+            }
+
+            updateMood(text) {
+                // Simple mood detection based on keywords
+                const happyWords = ['happy', 'joy', 'great', 'wonderful', 'awesome', 'excited'];
+                const sadWords = ['sad', 'unhappy', 'depressed', 'miserable', 'cry'];
+                const curiousWords = ['why', 'how', 'what', 'when', 'where', 'explain', 'tell me'];
+                const playfulWords = ['joke', 'fun', 'laugh', 'play', 'game'];
+                const concernedWords = ['help', 'problem', 'issue', 'worry', 'concern', 'trouble'];
+
+                const lowerText = text.toLowerCase();
+                
+                if (happyWords.some(word => lowerText.includes(word))) {
+                    this.mood = "happy";
+                } else if (sadWords.some(word => lowerText.includes(word))) {
+                    this.mood = "sad";
+                } else if (curiousWords.some(word => lowerText.includes(word))) {
+                    this.mood = "curious";
+                } else if (playfulWords.some(word => lowerText.includes(word))) {
+                    this.mood = "playful";
+                } else if (concernedWords.some(word => lowerText.includes(word))) {
+                    this.mood = "concerned";
+                } else {
+                    // Gradually return to neutral if no specific mood detected
+                    const timeSinceLastUpdate = (Date.now() - this.lastUpdate) / 1000 / 60; // in minutes
+                    if (timeSinceLastUpdate > 5) {
+                        this.mood = "neutral";
+                    }
+                }
+                
+                this.lastUpdate = Date.now();
+                this.updateTint();
+                return this.mood;
+            }
+
+            updateTint() {
+                switch(this.mood) {
+                    case "happy":
+                        this.moodTint = { r: 0, g: 50, b: 0, a: 40 };
+                        break;
+                    case "sad":
+                        this.moodTint = { r: 0, g: 0, b: 50, a: 40 };
+                        break;
+                    case "curious":
+                        this.moodTint = { r: 50, g: 50, b: 0, a: 40 };
+                        break;
+                    case "playful":
+                        this.moodTint = { r: 50, g: 0, b: 50, a: 40 };
+                        break;
+                    case "concerned":
+                        this.moodTint = { r: 50, g: 0, b: 0, a: 40 };
+                        break;
+                    default: // neutral
+                        this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+                }
+            }
+
+            getCurrentMood() {
+                return this.mood;
+            }
+
+            getResponseFlavor(text) {
+                // Add emojis and stylistic changes based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return `${text} 😊`;
+                    case "sad":
+                        return `${text} 😔`;
+                    case "curious":
+                        return `${text} 🤔`;
+                    case "playful":
+                        return `${text} 😄`;
+                    case "concerned":
+                        return `${text} 😐`;
+                    default:
+                        return text;
+                }
+            }
+
+            getVoiceStyle() {
+                // Return voice parameters based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return { rate: 1.1, pitch: 1.1 };
+                    case "sad":
+                        return { rate: 0.9, pitch: 0.9 };
+                    case "curious":
+                        return { rate: 1.05, pitch: 1.05 };
+                    case "playful":
+                        return { rate: 1.15, pitch: 1.15 };
+                    case "concerned":
+                        return { rate: 0.95, pitch: 0.95 };
+                    default:
+                        return { rate: 1.0, pitch: 1.0 };
+                }
+            }
+        }
+
+        class NovaUI {
+            constructor() {
+                this.isDarkMode = false;
+                this.isFullscreen = false;
+                this.listening = false;
+                this.speaking = false;
+                this.processing = false;
+                this.moodEngine = new MoodEngine();
+                this.recognition = null;
+                this.speechSynthesis = window.speechSynthesis;
+                this.wakeWord = "nova";
+                this.wakeWordActive = false;
+                
+                // DOM elements
+                this.circle = document.getElementById('circle');
+                this.subtitle = document.getElementById('subtitle');
+                this.userTranscript = document.getElementById('user-transcript');
+                this.response = document.getElementById('response');
+                this.debug = document.getElementById('debug');
+                this.moodIndicator = document.getElementById('mood-indicator');
+                this.listenButton = document.getElementById('listen-button');
+                this.subtitleDisplay = document.getElementById('subtitle-display');
+                this.waveform = document.getElementById('waveform');
+                this.processingDots = document.getElementById('processing-dots');
+                this.ripple = document.getElementById('ripple');
+                
+                // Initialize
+                this.initWaveform();
+                this.initProcessingDots();
+                this.initEventListeners();
+                this.initSubtitleDrag();
+                this.initSpeechRecognition();
+                
+                // Start with a welcome message
+                this.updateResponse("Hello, I'm Nova. Ready to help!");
+            }
+            
+            initWaveform() {
+                // Create waveform lines
+                for (let i = 0; i < 50; i++) {
+                    const line = document.createElement('div');
+                    line.className = 'waveform-line';
+                    line.style.height = `${Math.random() * 20 + 10}px`;
+                    this.waveform.appendChild(line);
+                }
+            }
+            
+            initProcessingDots() {
+                // Create processing dots
+                const dotCount = 6;
+                const orbitRadius = 90;
+                
+                for (let i = 0; i < dotCount; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'processing-dot';
+                    const angle = (i * (360 / dotCount));
+                    const x = orbitRadius * Math.cos(angle * Math.PI / 180);
+                    const y = orbitRadius * Math.sin(angle * Math.PI / 180);
+                    
+                    dot.style.transform = `translate(${x}px, ${y}px)`;
+                    this.processingDots.appendChild(dot);
+                }
+            }
+            
+            initEventListeners() {
+                // Theme toggle
+                document.getElementById('theme-toggle').addEventListener('click', () => {
+                    this.toggleTheme();
+                });
+                
+                // Fullscreen toggle
+                document.getElementById('fullscreen-toggle').addEventListener('click', () => {
+                    this.toggleFullscreen();
+                });
+                
+                // Mood selection
+                document.querySelectorAll('.dropdown-content button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const mood = e.target.getAttribute('data-mood');
+                        this.setMood(mood);
+                    });
+                });
+                
+                // Listen button
+                this.listenButton.addEventListener('click', () => {
+                    if (!this.listening && !this.speaking) {
+                        this.startListening();
+                    } else if (this.listening) {
+                        this.stopListening();
+                    }
+                });
+            }
+            
+            initSubtitleDrag() {
+                let isDragging = false;
+                let offsetX, offsetY;
+                
+                this.subtitleDisplay.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    offsetX = e.clientX - this.subtitleDisplay.getBoundingClientRect().left;
+                    offsetY = e.clientY - this.subtitleDisplay.getBoundingClientRect().top;
+                    this.subtitleDisplay.style.cursor = 'grabbing';
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    this.subtitleDisplay.style.left = `${e.clientX - offsetX}px`;
+                    this.subtitleDisplay.style.top = `${e.clientY - offsetY}px`;
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    this.subtitleDisplay.style.cursor = 'grab';
+                });
+            }
+            
+            initSpeechRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    this.updateDebug("Speech recognition not supported in this browser");
+                    return;
+                }
+                
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = true;
+                this.recognition.interimResults = true;
+                this.recognition.maxAlternatives = 1;
+                
+                this.recognition.onstart = () => {
+                    this.listening = true;
+                    this.setState('listening');
+                    this.updateDebug("Listening for speech...");
+                };
+                
+                this.recognition.onerror = (event) => {
+                    this.setState('error');
+                    this.updateDebug(`Recognition error: ${event.error}`);
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                this.recognition.onend = () => {
+                    if (this.listening && !this.wakeWordActive) {
+                        // If we're still supposed to be listening, restart recognition
+                        this.recognition.start();
+                    }
+                };
+                
+                this.recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript.trim().toLowerCase();
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    
+                    // Check for wake word in interim results
+                    if (interimTranscript.includes(this.wakeWord) && !this.wakeWordActive) {
+                        this.wakeWordActive = true;
+                        this.updateDebug("Wake word detected!");
+                        this.userTranscript.textContent = "Listening...";
+                        // Add visual indication that wake word was detected
+                        this.setState('listening');
+                        return;
+                    }
+                    
+                    // Update UI with interim results
+                    if (interimTranscript && this.wakeWordActive) {
+                        this.updateUserTranscript(interimTranscript);
+                        // Show active listening state
+                        this.setState('listening');
+                    }
+                    
+                    // Process final results
+                    if (finalTranscript && this.wakeWordActive) {
+                        // Show that we've stopped listening and started processing
+                        this.updateDebug("Processing your request...");
+                        this.setState('processing');
+                        
+                        // Process the input after a small delay to show the transition
+                        setTimeout(() => {
+                            this.processUserInput(finalTranscript);
+                            this.wakeWordActive = false;
+                        }, 300);
+                    }
+                };
+                
+                // Start listening for wake word
+                this.recognition.start();
+            }
+            
+            toggleTheme() {
+                this.isDarkMode = !this.isDarkMode;
+                document.body.classList.toggle('dark-mode', this.isDarkMode);
+                this.updateDebug(`Theme changed to ${this.isDarkMode ? 'dark' : 'light'} mode`);
+            }
+            
+            toggleFullscreen() {
+                if (!this.isFullscreen) {
+                    document.documentElement.requestFullscreen();
+                    document.getElementById('app-container').classList.add('fullscreen');
+                } else {
+                    document.exitFullscreen();
+                    document.getElementById('app-container').classList.remove('fullscreen');
+                }
+                this.isFullscreen = !this.isFullscreen;
+                this.updateDebug(`Fullscreen ${this.isFullscreen ? 'enabled' : 'disabled'}`);
+            }
+            
+            setMood(mood) {
+                this.moodEngine.mood = mood;
+                this.moodEngine.lastUpdate = Date.now();
+                this.moodEngine.updateTint();
+                this.moodIndicator.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+                this.updateDebug(`Mood changed to ${mood}`);
+            }
+            
+            setState(state) {
+                // Reset all states first
+                this.circle.className = 'circle';
+                this.waveform.style.display = 'none';
+                this.processingDots.style.display = 'none';
+                this.ripple.style.display = 'none';
+                
+                // Set the new state
+                this.circle.classList.add(state);
+                
+                switch(state) {
+                    case 'idle':
+                        break;
+                    case 'listening':
+                        this.ripple.style.display = 'block';
+                        break;
+                    case 'speaking':
+                        this.waveform.style.display = 'flex';
+                        this.animateWaveform();
+                        break;
+                    case 'processing':
+                        this.processingDots.style.display = 'block';
+                        break;
+                    case 'error':
+                        break;
+                }
+            }
+            
+            animateWaveform() {
+                const lines = this.waveform.querySelectorAll('.waveform-line');
+                const interval = setInterval(() => {
+                    if (!this.speaking) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    lines.forEach(line => {
+                        line.style.height = `${Math.random() * 20 + 10}px`;
+                    });
+                }, 100);
+            }
+            
+            startListening() {
+                this.wakeWordActive = true;
+                this.updateDebug("Listening for your command...");
+                this.userTranscript.textContent = "Listening...";
+            }
+            
+            stopListening() {
+                this.wakeWordActive = false;
+                this.updateDebug("Stopped listening");
+                this.userTranscript.textContent = "";
+            }
+            
+            updateUserTranscript(text) {
+                this.userTranscript.textContent = `You: ${text}`;
+            }
+            
+            async processUserInput(text) {
+                // Clean up the text by removing the wake word if present
+                const cleanText = text.replace(new RegExp(this.wakeWord, 'gi'), '').trim();
+                if (!cleanText) return;
+                
+                this.updateUserTranscript(cleanText);
+                this.setState('processing');
+                
+                // Start timing
+                const startTime = performance.now();
+                
+                // Update mood based on input
+                this.moodEngine.updateMood(cleanText);
+                const currentMood = this.moodEngine.getCurrentMood();
+                this.moodIndicator.textContent = `Mood: ${currentMood.charAt(0).toUpperCase() + currentMood.slice(1)}`;
+                
+                try {
+                    // Send to Ollama API
+                    const response = await this.queryOllama(cleanText);
+                    
+                    // Calculate processing time
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    
+                    // Update processing time display
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms`;
+                    
+                    this.speak(response);
+                } catch (error) {
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms (Error)`;
+                    
+                    this.setState('error');
+                    this.updateDebug(`Error: ${error.message}`);
+                    this.updateResponse("Sorry, I encountered an error processing your request.");
+                    setTimeout(() => this.setState('idle'), 2000);
+                }
+            }
+            
+            async queryOllama(prompt) {
+                this.updateDebug("Processing with Ollama...");
+                
+                // Replace with your actual Ollama API endpoint
+                const ollamaUrl = 'http://localhost:11434/api/generate';
+                
+                const response = await fetch(ollamaUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'mistral',
+                        prompt: prompt,
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ollama API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.response;
+            }
+            
+            speak(text) {
+                this.speaking = true;
+                this.setState('speaking');
+                
+                // Apply mood flavoring to the display text
+                const displayText = this.moodEngine.getResponseFlavor(`Nova: ${text}`);
+                this.updateResponse(displayText);
+                
+                // Remove emojis for speech
+                const cleanText = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
+                
+                // Configure speech synthesis
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                
+                // Get available voices and select a female voice if possible
+                const voices = window.speechSynthesis.getVoices();
+                const femaleVoice = voices.find(voice => 
+                    voice.name.toLowerCase().includes('female') || 
+                    voice.name.toLowerCase().includes('zira')
+                );
+                if (femaleVoice) {
+                    utterance.voice = femaleVoice;
+                }
+                
+                // Apply voice style based on mood
+                const voiceStyle = this.moodEngine.getVoiceStyle();
+                utterance.rate = voiceStyle.rate;
+                utterance.pitch = voiceStyle.pitch;
+                
+                // Add event handlers
+                utterance.onstart = () => {
+                    this.speaking = true;
+                    this.setState('speaking');
+                };
+                
+                utterance.onend = () => {
+                    this.speaking = false;
+                    this.setState('idle');
+                };
+                
+                utterance.onerror = (event) => {
+                    console.error('Speech synthesis error:', event);
+                    this.speaking = false;
+                    this.setState('error');
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                // Speak the text
+                window.speechSynthesis.cancel(); // Cancel any ongoing speech
+                window.speechSynthesis.speak(utterance);
+            }
+            
+            stopSpeaking() {
+                this.speaking = false;
+                this.setState('idle');
+                this.subtitleDisplay.style.display = 'none';
+                this.updateSubtitle('Ready');
+            }
+            
+            updateSubtitle(text) {
+                this.subtitle.textContent = text;
+                if (text && text !== 'Ready') {
+                    this.subtitleDisplay.textContent = text;
+                    this.subtitleDisplay.style.display = 'block';
+                } else {
+                    this.subtitleDisplay.style.display = 'none';
+                }
+            }
+            
+            updateResponse(text) {
+                // Truncate very long responses
+                const maxLength = this.isFullscreen ? 1000 : 500;
+                if (text.length > maxLength) {
+                    text = text.substring(0, maxLength - 3) + '...';
+                }
+                this.response.textContent = text;
+            }
+            
+            updateDebug(text) {
+                this.debug.textContent = text;
+            }
+        }
+
+        // At the end of your HTML file
+        document.addEventListener('DOMContentLoaded', () => {
+            const nova = new NovaUI();
+        });
+    </script>
+</body>
+</html>
+
+    <div class="subtitle-display" id="subtitle-display"></div>
+
+    <script>
+        class MoodEngine {
+            constructor() {
+                this.mood = "neutral";
+                this.lastUpdate = Date.now();
+                this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+            }
+
+            updateMood(text) {
+                // Simple mood detection based on keywords
+                const happyWords = ['happy', 'joy', 'great', 'wonderful', 'awesome', 'excited'];
+                const sadWords = ['sad', 'unhappy', 'depressed', 'miserable', 'cry'];
+                const curiousWords = ['why', 'how', 'what', 'when', 'where', 'explain', 'tell me'];
+                const playfulWords = ['joke', 'fun', 'laugh', 'play', 'game'];
+                const concernedWords = ['help', 'problem', 'issue', 'worry', 'concern', 'trouble'];
+
+                const lowerText = text.toLowerCase();
+                
+                if (happyWords.some(word => lowerText.includes(word))) {
+                    this.mood = "happy";
+                } else if (sadWords.some(word => lowerText.includes(word))) {
+                    this.mood = "sad";
+                } else if (curiousWords.some(word => lowerText.includes(word))) {
+                    this.mood = "curious";
+                } else if (playfulWords.some(word => lowerText.includes(word))) {
+                    this.mood = "playful";
+                } else if (concernedWords.some(word => lowerText.includes(word))) {
+                    this.mood = "concerned";
+                } else {
+                    // Gradually return to neutral if no specific mood detected
+                    const timeSinceLastUpdate = (Date.now() - this.lastUpdate) / 1000 / 60; // in minutes
+                    if (timeSinceLastUpdate > 5) {
+                        this.mood = "neutral";
+                    }
+                }
+                
+                this.lastUpdate = Date.now();
+                this.updateTint();
+                return this.mood;
+            }
+
+            updateTint() {
+                switch(this.mood) {
+                    case "happy":
+                        this.moodTint = { r: 0, g: 50, b: 0, a: 40 };
+                        break;
+                    case "sad":
+                        this.moodTint = { r: 0, g: 0, b: 50, a: 40 };
+                        break;
+                    case "curious":
+                        this.moodTint = { r: 50, g: 50, b: 0, a: 40 };
+                        break;
+                    case "playful":
+                        this.moodTint = { r: 50, g: 0, b: 50, a: 40 };
+                        break;
+                    case "concerned":
+                        this.moodTint = { r: 50, g: 0, b: 0, a: 40 };
+                        break;
+                    default: // neutral
+                        this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+                }
+            }
+
+            getCurrentMood() {
+                return this.mood;
+            }
+
+            getResponseFlavor(text) {
+                // Add emojis and stylistic changes based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return `${text} 😊`;
+                    case "sad":
+                        return `${text} 😔`;
+                    case "curious":
+                        return `${text} 🤔`;
+                    case "playful":
+                        return `${text} 😄`;
+                    case "concerned":
+                        return `${text} 😐`;
+                    default:
+                        return text;
+                }
+            }
+
+            getVoiceStyle() {
+                // Return voice parameters based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return { rate: 1.1, pitch: 1.1 };
+                    case "sad":
+                        return { rate: 0.9, pitch: 0.9 };
+                    case "curious":
+                        return { rate: 1.05, pitch: 1.05 };
+                    case "playful":
+                        return { rate: 1.15, pitch: 1.15 };
+                    case "concerned":
+                        return { rate: 0.95, pitch: 0.95 };
+                    default:
+                        return { rate: 1.0, pitch: 1.0 };
+                }
+            }
+        }
+
+        class NovaUI {
+            constructor() {
+                this.isDarkMode = false;
+                this.isFullscreen = false;
+                this.listening = false;
+                this.speaking = false;
+                this.processing = false;
+                this.moodEngine = new MoodEngine();
+                this.recognition = null;
+                this.speechSynthesis = window.speechSynthesis;
+                this.wakeWord = "nova";
+                this.wakeWordActive = false;
+                
+                // DOM elements
+                this.circle = document.getElementById('circle');
+                this.subtitle = document.getElementById('subtitle');
+                this.userTranscript = document.getElementById('user-transcript');
+                this.response = document.getElementById('response');
+                this.debug = document.getElementById('debug');
+                this.moodIndicator = document.getElementById('mood-indicator');
+                this.listenButton = document.getElementById('listen-button');
+                this.subtitleDisplay = document.getElementById('subtitle-display');
+                this.waveform = document.getElementById('waveform');
+                this.processingDots = document.getElementById('processing-dots');
+                this.ripple = document.getElementById('ripple');
+                
+                // Initialize
+                this.initWaveform();
+                this.initProcessingDots();
+                this.initEventListeners();
+                this.initSubtitleDrag();
+                this.initSpeechRecognition();
+                
+                // Start with a welcome message
+                this.updateResponse("Hello, I'm Nova. Ready to help!");
+            }
+            
+            initWaveform() {
+                // Create waveform lines
+                for (let i = 0; i < 50; i++) {
+                    const line = document.createElement('div');
+                    line.className = 'waveform-line';
+                    line.style.height = `${Math.random() * 20 + 10}px`;
+                    this.waveform.appendChild(line);
+                }
+            }
+            
+            initProcessingDots() {
+                // Create processing dots
+                const dotCount = 6;
+                const orbitRadius = 90;
+                
+                for (let i = 0; i < dotCount; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'processing-dot';
+                    const angle = (i * (360 / dotCount));
+                    const x = orbitRadius * Math.cos(angle * Math.PI / 180);
+                    const y = orbitRadius * Math.sin(angle * Math.PI / 180);
+                    
+                    dot.style.transform = `translate(${x}px, ${y}px)`;
+                    this.processingDots.appendChild(dot);
+                }
+            }
+            
+            initEventListeners() {
+                // Theme toggle
+                document.getElementById('theme-toggle').addEventListener('click', () => {
+                    this.toggleTheme();
+                });
+                
+                // Fullscreen toggle
+                document.getElementById('fullscreen-toggle').addEventListener('click', () => {
+                    this.toggleFullscreen();
+                });
+                
+                // Mood selection
+                document.querySelectorAll('.dropdown-content button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const mood = e.target.getAttribute('data-mood');
+                        this.setMood(mood);
+                    });
+                });
+                
+                // Listen button
+                this.listenButton.addEventListener('click', () => {
+                    if (!this.listening && !this.speaking) {
+                        this.startListening();
+                    } else if (this.listening) {
+                        this.stopListening();
+                    }
+                });
+            }
+            
+            initSubtitleDrag() {
+                let isDragging = false;
+                let offsetX, offsetY;
+                
+                this.subtitleDisplay.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    offsetX = e.clientX - this.subtitleDisplay.getBoundingClientRect().left;
+                    offsetY = e.clientY - this.subtitleDisplay.getBoundingClientRect().top;
+                    this.subtitleDisplay.style.cursor = 'grabbing';
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    this.subtitleDisplay.style.left = `${e.clientX - offsetX}px`;
+                    this.subtitleDisplay.style.top = `${e.clientY - offsetY}px`;
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    this.subtitleDisplay.style.cursor = 'grab';
+                });
+            }
+            
+            initSpeechRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    this.updateDebug("Speech recognition not supported in this browser");
+                    return;
+                }
+                
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = true;
+                this.recognition.interimResults = true;
+                this.recognition.maxAlternatives = 1;
+                
+                this.recognition.onstart = () => {
+                    this.listening = true;
+                    this.setState('listening');
+                    this.updateDebug("Listening for speech...");
+                };
+                
+                this.recognition.onerror = (event) => {
+                    this.setState('error');
+                    this.updateDebug(`Recognition error: ${event.error}`);
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                this.recognition.onend = () => {
+                    if (this.listening && !this.wakeWordActive) {
+                        // If we're still supposed to be listening, restart recognition
+                        this.recognition.start();
+                    }
+                };
+                
+                this.recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript.trim().toLowerCase();
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    
+                    // Check for wake word in interim results
+                    if (interimTranscript.includes(this.wakeWord) && !this.wakeWordActive) {
+                        this.wakeWordActive = true;
+                        this.updateDebug("Wake word detected!");
+                        this.userTranscript.textContent = "Listening...";
+                        // Add visual indication that wake word was detected
+                        this.setState('listening');
+                        return;
+                    }
+                    
+                    // Update UI with interim results
+                    if (interimTranscript && this.wakeWordActive) {
+                        this.updateUserTranscript(interimTranscript);
+                        // Show active listening state
+                        this.setState('listening');
+                    }
+                    
+                    // Process final results
+                    if (finalTranscript && this.wakeWordActive) {
+                        // Show that we've stopped listening and started processing
+                        this.updateDebug("Processing your request...");
+                        this.setState('processing');
+                        
+                        // Process the input after a small delay to show the transition
+                        setTimeout(() => {
+                            this.processUserInput(finalTranscript);
+                            this.wakeWordActive = false;
+                        }, 300);
+                    }
+                };
+                
+                // Start listening for wake word
+                this.recognition.start();
+            }
+            
+            toggleTheme() {
+                this.isDarkMode = !this.isDarkMode;
+                document.body.classList.toggle('dark-mode', this.isDarkMode);
+                this.updateDebug(`Theme changed to ${this.isDarkMode ? 'dark' : 'light'} mode`);
+            }
+            
+            toggleFullscreen() {
+                if (!this.isFullscreen) {
+                    document.documentElement.requestFullscreen();
+                    document.getElementById('app-container').classList.add('fullscreen');
+                } else {
+                    document.exitFullscreen();
+                    document.getElementById('app-container').classList.remove('fullscreen');
+                }
+                this.isFullscreen = !this.isFullscreen;
+                this.updateDebug(`Fullscreen ${this.isFullscreen ? 'enabled' : 'disabled'}`);
+            }
+            
+            setMood(mood) {
+                this.moodEngine.mood = mood;
+                this.moodEngine.lastUpdate = Date.now();
+                this.moodEngine.updateTint();
+                this.moodIndicator.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+                this.updateDebug(`Mood changed to ${mood}`);
+            }
+            
+            setState(state) {
+                // Reset all states first
+                this.circle.className = 'circle';
+                this.waveform.style.display = 'none';
+                this.processingDots.style.display = 'none';
+                this.ripple.style.display = 'none';
+                
+                // Set the new state
+                this.circle.classList.add(state);
+                
+                switch(state) {
+                    case 'idle':
+                        break;
+                    case 'listening':
+                        this.ripple.style.display = 'block';
+                        break;
+                    case 'speaking':
+                        this.waveform.style.display = 'flex';
+                        this.animateWaveform();
+                        break;
+                    case 'processing':
+                        this.processingDots.style.display = 'block';
+                        break;
+                    case 'error':
+                        break;
+                }
+            }
+            
+            animateWaveform() {
+                const lines = this.waveform.querySelectorAll('.waveform-line');
+                const interval = setInterval(() => {
+                    if (!this.speaking) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    lines.forEach(line => {
+                        line.style.height = `${Math.random() * 20 + 10}px`;
+                    });
+                }, 100);
+            }
+            
+            startListening() {
+                this.wakeWordActive = true;
+                this.updateDebug("Listening for your command...");
+                this.userTranscript.textContent = "Listening...";
+            }
+            
+            stopListening() {
+                this.wakeWordActive = false;
+                this.updateDebug("Stopped listening");
+                this.userTranscript.textContent = "";
+            }
+            
+            updateUserTranscript(text) {
+                this.userTranscript.textContent = `You: ${text}`;
+            }
+            
+            async processUserInput(text) {
+                // Clean up the text by removing the wake word if present
+                const cleanText = text.replace(new RegExp(this.wakeWord, 'gi'), '').trim();
+                if (!cleanText) return;
+                
+                this.updateUserTranscript(cleanText);
+                this.setState('processing');
+                
+                // Start timing
+                const startTime = performance.now();
+                
+                // Update mood based on input
+                this.moodEngine.updateMood(cleanText);
+                const currentMood = this.moodEngine.getCurrentMood();
+                this.moodIndicator.textContent = `Mood: ${currentMood.charAt(0).toUpperCase() + currentMood.slice(1)}`;
+                
+                try {
+                    // Send to Ollama API
+                    const response = await this.queryOllama(cleanText);
+                    
+                    // Calculate processing time
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    
+                    // Update processing time display
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms`;
+                    
+                    this.speak(response);
+                } catch (error) {
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms (Error)`;
+                    
+                    this.setState('error');
+                    this.updateDebug(`Error: ${error.message}`);
+                    this.updateResponse("Sorry, I encountered an error processing your request.");
+                    setTimeout(() => this.setState('idle'), 2000);
+                }
+            }
+            
+            async queryOllama(prompt) {
+                this.updateDebug("Processing with Ollama...");
+                
+                // Replace with your actual Ollama API endpoint
+                const ollamaUrl = 'http://localhost:11434/api/generate';
+                
+                const response = await fetch(ollamaUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'mistral',
+                        prompt: prompt,
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ollama API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.response;
+            }
+            
+            speak(text) {
+                this.speaking = true;
+                this.setState('speaking');
+                
+                // Apply mood flavoring to the display text
+                const displayText = this.moodEngine.getResponseFlavor(`Nova: ${text}`);
+                this.updateResponse(displayText);
+                
+                // Remove emojis for speech
+                const cleanText = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
+                
+                // Configure speech synthesis
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                
+                // Get available voices and select a female voice if possible
+                const voices = window.speechSynthesis.getVoices();
+                const femaleVoice = voices.find(voice => 
+                    voice.name.toLowerCase().includes('female') || 
+                    voice.name.toLowerCase().includes('zira')
+                );
+                if (femaleVoice) {
+                    utterance.voice = femaleVoice;
+                }
+                
+                // Apply voice style based on mood
+                const voiceStyle = this.moodEngine.getVoiceStyle();
+                utterance.rate = voiceStyle.rate;
+                utterance.pitch = voiceStyle.pitch;
+                
+                // Add event handlers
+                utterance.onstart = () => {
+                    this.speaking = true;
+                    this.setState('speaking');
+                };
+                
+                utterance.onend = () => {
+                    this.speaking = false;
+                    this.setState('idle');
+                };
+                
+                utterance.onerror = (event) => {
+                    console.error('Speech synthesis error:', event);
+                    this.speaking = false;
+                    this.setState('error');
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                // Speak the text
+                window.speechSynthesis.cancel(); // Cancel any ongoing speech
+                window.speechSynthesis.speak(utterance);
+            }
+            
+            stopSpeaking() {
+                this.speaking = false;
+                this.setState('idle');
+                this.subtitleDisplay.style.display = 'none';
+                this.updateSubtitle('Ready');
+            }
+            
+            updateSubtitle(text) {
+                this.subtitle.textContent = text;
+                if (text && text !== 'Ready') {
+                    this.subtitleDisplay.textContent = text;
+                    this.subtitleDisplay.style.display = 'block';
+                } else {
+                    this.subtitleDisplay.style.display = 'none';
+                }
+            }
+            
+            updateResponse(text) {
+                // Truncate very long responses
+                const maxLength = this.isFullscreen ? 1000 : 500;
+                if (text.length > maxLength) {
+                    text = text.substring(0, maxLength - 3) + '...';
+                }
+                this.response.textContent = text;
+            }
+            
+            updateDebug(text) {
+                this.debug.textContent = text;
+            }
+        }
+
+        // At the end of your HTML file
+        document.addEventListener('DOMContentLoaded', () => {
+            const nova = new NovaUI();
+        });
+    </script>
+</body>
+</html>
+
+    <div class="subtitle-display" id="subtitle-display"></div>
+
+    <script>
+        class MoodEngine {
+            constructor() {
+                this.mood = "neutral";
+                this.lastUpdate = Date.now();
+                this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+            }
+
+            updateMood(text) {
+                // Simple mood detection based on keywords
+                const happyWords = ['happy', 'joy', 'great', 'wonderful', 'awesome', 'excited'];
+                const sadWords = ['sad', 'unhappy', 'depressed', 'miserable', 'cry'];
+                const curiousWords = ['why', 'how', 'what', 'when', 'where', 'explain', 'tell me'];
+                const playfulWords = ['joke', 'fun', 'laugh', 'play', 'game'];
+                const concernedWords = ['help', 'problem', 'issue', 'worry', 'concern', 'trouble'];
+
+                const lowerText = text.toLowerCase();
+                
+                if (happyWords.some(word => lowerText.includes(word))) {
+                    this.mood = "happy";
+                } else if (sadWords.some(word => lowerText.includes(word))) {
+                    this.mood = "sad";
+                } else if (curiousWords.some(word => lowerText.includes(word))) {
+                    this.mood = "curious";
+                } else if (playfulWords.some(word => lowerText.includes(word))) {
+                    this.mood = "playful";
+                } else if (concernedWords.some(word => lowerText.includes(word))) {
+                    this.mood = "concerned";
+                } else {
+                    // Gradually return to neutral if no specific mood detected
+                    const timeSinceLastUpdate = (Date.now() - this.lastUpdate) / 1000 / 60; // in minutes
+                    if (timeSinceLastUpdate > 5) {
+                        this.mood = "neutral";
+                    }
+                }
+                
+                this.lastUpdate = Date.now();
+                this.updateTint();
+                return this.mood;
+            }
+
+            updateTint() {
+                switch(this.mood) {
+                    case "happy":
+                        this.moodTint = { r: 0, g: 50, b: 0, a: 40 };
+                        break;
+                    case "sad":
+                        this.moodTint = { r: 0, g: 0, b: 50, a: 40 };
+                        break;
+                    case "curious":
+                        this.moodTint = { r: 50, g: 50, b: 0, a: 40 };
+                        break;
+                    case "playful":
+                        this.moodTint = { r: 50, g: 0, b: 50, a: 40 };
+                        break;
+                    case "concerned":
+                        this.moodTint = { r: 50, g: 0, b: 0, a: 40 };
+                        break;
+                    default: // neutral
+                        this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+                }
+            }
+
+            getCurrentMood() {
+                return this.mood;
+            }
+
+            getResponseFlavor(text) {
+                // Add emojis and stylistic changes based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return `${text} 😊`;
+                    case "sad":
+                        return `${text} 😔`;
+                    case "curious":
+                        return `${text} 🤔`;
+                    case "playful":
+                        return `${text} 😄`;
+                    case "concerned":
+                        return `${text} 😐`;
+                    default:
+                        return text;
+                }
+            }
+
+            getVoiceStyle() {
+                // Return voice parameters based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return { rate: 1.1, pitch: 1.1 };
+                    case "sad":
+                        return { rate: 0.9, pitch: 0.9 };
+                    case "curious":
+                        return { rate: 1.05, pitch: 1.05 };
+                    case "playful":
+                        return { rate: 1.15, pitch: 1.15 };
+                    case "concerned":
+                        return { rate: 0.95, pitch: 0.95 };
+                    default:
+                        return { rate: 1.0, pitch: 1.0 };
+                }
+            }
+        }
+
+        class NovaUI {
+            constructor() {
+                this.isDarkMode = false;
+                this.isFullscreen = false;
+                this.listening = false;
+                this.speaking = false;
+                this.processing = false;
+                this.moodEngine = new MoodEngine();
+                this.recognition = null;
+                this.speechSynthesis = window.speechSynthesis;
+                this.wakeWord = "nova";
+                this.wakeWordActive = false;
+                
+                // DOM elements
+                this.circle = document.getElementById('circle');
+                this.subtitle = document.getElementById('subtitle');
+                this.userTranscript = document.getElementById('user-transcript');
+                this.response = document.getElementById('response');
+                this.debug = document.getElementById('debug');
+                this.moodIndicator = document.getElementById('mood-indicator');
+                this.listenButton = document.getElementById('listen-button');
+                this.subtitleDisplay = document.getElementById('subtitle-display');
+                this.waveform = document.getElementById('waveform');
+                this.processingDots = document.getElementById('processing-dots');
+                this.ripple = document.getElementById('ripple');
+                
+                // Initialize
+                this.initWaveform();
+                this.initProcessingDots();
+                this.initEventListeners();
+                this.initSubtitleDrag();
+                this.initSpeechRecognition();
+                
+                // Start with a welcome message
+                this.updateResponse("Hello, I'm Nova. Ready to help!");
+            }
+            
+            initWaveform() {
+                // Create waveform lines
+                for (let i = 0; i < 50; i++) {
+                    const line = document.createElement('div');
+                    line.className = 'waveform-line';
+                    line.style.height = `${Math.random() * 20 + 10}px`;
+                    this.waveform.appendChild(line);
+                }
+            }
+            
+            initProcessingDots() {
+                // Create processing dots
+                const dotCount = 6;
+                const orbitRadius = 90;
+                
+                for (let i = 0; i < dotCount; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'processing-dot';
+                    const angle = (i * (360 / dotCount));
+                    const x = orbitRadius * Math.cos(angle * Math.PI / 180);
+                    const y = orbitRadius * Math.sin(angle * Math.PI / 180);
+                    
+                    dot.style.transform = `translate(${x}px, ${y}px)`;
+                    this.processingDots.appendChild(dot);
+                }
+            }
+            
+            initEventListeners() {
+                // Theme toggle
+                document.getElementById('theme-toggle').addEventListener('click', () => {
+                    this.toggleTheme();
+                });
+                
+                // Fullscreen toggle
+                document.getElementById('fullscreen-toggle').addEventListener('click', () => {
+                    this.toggleFullscreen();
+                });
+                
+                // Mood selection
+                document.querySelectorAll('.dropdown-content button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const mood = e.target.getAttribute('data-mood');
+                        this.setMood(mood);
+                    });
+                });
+                
+                // Listen button
+                this.listenButton.addEventListener('click', () => {
+                    if (!this.listening && !this.speaking) {
+                        this.startListening();
+                    } else if (this.listening) {
+                        this.stopListening();
+                    }
+                });
+            }
+            
+            initSubtitleDrag() {
+                let isDragging = false;
+                let offsetX, offsetY;
+                
+                this.subtitleDisplay.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    offsetX = e.clientX - this.subtitleDisplay.getBoundingClientRect().left;
+                    offsetY = e.clientY - this.subtitleDisplay.getBoundingClientRect().top;
+                    this.subtitleDisplay.style.cursor = 'grabbing';
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    this.subtitleDisplay.style.left = `${e.clientX - offsetX}px`;
+                    this.subtitleDisplay.style.top = `${e.clientY - offsetY}px`;
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    this.subtitleDisplay.style.cursor = 'grab';
+                });
+            }
+            
+            initSpeechRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    this.updateDebug("Speech recognition not supported in this browser");
+                    return;
+                }
+                
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = true;
+                this.recognition.interimResults = true;
+                this.recognition.maxAlternatives = 1;
+                
+                this.recognition.onstart = () => {
+                    this.listening = true;
+                    this.setState('listening');
+                    this.updateDebug("Listening for speech...");
+                };
+                
+                this.recognition.onerror = (event) => {
+                    this.setState('error');
+                    this.updateDebug(`Recognition error: ${event.error}`);
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                this.recognition.onend = () => {
+                    if (this.listening && !this.wakeWordActive) {
+                        // If we're still supposed to be listening, restart recognition
+                        this.recognition.start();
+                    }
+                };
+                
+                this.recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript.trim().toLowerCase();
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    
+                    // Check for wake word in interim results
+                    if (interimTranscript.includes(this.wakeWord) && !this.wakeWordActive) {
+                        this.wakeWordActive = true;
+                        this.updateDebug("Wake word detected!");
+                        this.userTranscript.textContent = "Listening...";
+                        // Add visual indication that wake word was detected
+                        this.setState('listening');
+                        return;
+                    }
+                    
+                    // Update UI with interim results
+                    if (interimTranscript && this.wakeWordActive) {
+                        this.updateUserTranscript(interimTranscript);
+                        // Show active listening state
+                        this.setState('listening');
+                    }
+                    
+                    // Process final results
+                    if (finalTranscript && this.wakeWordActive) {
+                        // Show that we've stopped listening and started processing
+                        this.updateDebug("Processing your request...");
+                        this.setState('processing');
+                        
+                        // Process the input after a small delay to show the transition
+                        setTimeout(() => {
+                            this.processUserInput(finalTranscript);
+                            this.wakeWordActive = false;
+                        }, 300);
+                    }
+                };
+                
+                // Start listening for wake word
+                this.recognition.start();
+            }
+            
+            toggleTheme() {
+                this.isDarkMode = !this.isDarkMode;
+                document.body.classList.toggle('dark-mode', this.isDarkMode);
+                this.updateDebug(`Theme changed to ${this.isDarkMode ? 'dark' : 'light'} mode`);
+            }
+            
+            toggleFullscreen() {
+                if (!this.isFullscreen) {
+                    document.documentElement.requestFullscreen();
+                    document.getElementById('app-container').classList.add('fullscreen');
+                } else {
+                    document.exitFullscreen();
+                    document.getElementById('app-container').classList.remove('fullscreen');
+                }
+                this.isFullscreen = !this.isFullscreen;
+                this.updateDebug(`Fullscreen ${this.isFullscreen ? 'enabled' : 'disabled'}`);
+            }
+            
+            setMood(mood) {
+                this.moodEngine.mood = mood;
+                this.moodEngine.lastUpdate = Date.now();
+                this.moodEngine.updateTint();
+                this.moodIndicator.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+                this.updateDebug(`Mood changed to ${mood}`);
+            }
+            
+            setState(state) {
+                // Reset all states first
+                this.circle.className = 'circle';
+                this.waveform.style.display = 'none';
+                this.processingDots.style.display = 'none';
+                this.ripple.style.display = 'none';
+                
+                // Set the new state
+                this.circle.classList.add(state);
+                
+                switch(state) {
+                    case 'idle':
+                        break;
+                    case 'listening':
+                        this.ripple.style.display = 'block';
+                        break;
+                    case 'speaking':
+                        this.waveform.style.display = 'flex';
+                        this.animateWaveform();
+                        break;
+                    case 'processing':
+                        this.processingDots.style.display = 'block';
+                        break;
+                    case 'error':
+                        break;
+                }
+            }
+            
+            animateWaveform() {
+                const lines = this.waveform.querySelectorAll('.waveform-line');
+                const interval = setInterval(() => {
+                    if (!this.speaking) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    lines.forEach(line => {
+                        line.style.height = `${Math.random() * 20 + 10}px`;
+                    });
+                }, 100);
+            }
+            
+            startListening() {
+                this.wakeWordActive = true;
+                this.updateDebug("Listening for your command...");
+                this.userTranscript.textContent = "Listening...";
+            }
+            
+            stopListening() {
+                this.wakeWordActive = false;
+                this.updateDebug("Stopped listening");
+                this.userTranscript.textContent = "";
+            }
+            
+            updateUserTranscript(text) {
+                this.userTranscript.textContent = `You: ${text}`;
+            }
+            
+            async processUserInput(text) {
+                // Clean up the text by removing the wake word if present
+                const cleanText = text.replace(new RegExp(this.wakeWord, 'gi'), '').trim();
+                if (!cleanText) return;
+                
+                this.updateUserTranscript(cleanText);
+                this.setState('processing');
+                
+                // Start timing
+                const startTime = performance.now();
+                
+                // Update mood based on input
+                this.moodEngine.updateMood(cleanText);
+                const currentMood = this.moodEngine.getCurrentMood();
+                this.moodIndicator.textContent = `Mood: ${currentMood.charAt(0).toUpperCase() + currentMood.slice(1)}`;
+                
+                try {
+                    // Send to Ollama API
+                    const response = await this.queryOllama(cleanText);
+                    
+                    // Calculate processing time
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    
+                    // Update processing time display
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms`;
+                    
+                    this.speak(response);
+                } catch (error) {
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms (Error)`;
+                    
+                    this.setState('error');
+                    this.updateDebug(`Error: ${error.message}`);
+                    this.updateResponse("Sorry, I encountered an error processing your request.");
+                    setTimeout(() => this.setState('idle'), 2000);
+                }
+            }
+            
+            async queryOllama(prompt) {
+                this.updateDebug("Processing with Ollama...");
+                
+                // Replace with your actual Ollama API endpoint
+                const ollamaUrl = 'http://localhost:11434/api/generate';
+                
+                const response = await fetch(ollamaUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'mistral',
+                        prompt: prompt,
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ollama API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.response;
+            }
+            
+            speak(text) {
+                this.speaking = true;
+                this.setState('speaking');
+                
+                // Apply mood flavoring to the display text
+                const displayText = this.moodEngine.getResponseFlavor(`Nova: ${text}`);
+                this.updateResponse(displayText);
+                
+                // Remove emojis for speech
+                const cleanText = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').trim();
+                
+                // Configure speech synthesis
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                
+                // Get available voices and select a female voice if possible
+                const voices = window.speechSynthesis.getVoices();
+                const femaleVoice = voices.find(voice => 
+                    voice.name.toLowerCase().includes('female') || 
+                    voice.name.toLowerCase().includes('zira')
+                );
+                if (femaleVoice) {
+                    utterance.voice = femaleVoice;
+                }
+                
+                // Apply voice style based on mood
+                const voiceStyle = this.moodEngine.getVoiceStyle();
+                utterance.rate = voiceStyle.rate;
+                utterance.pitch = voiceStyle.pitch;
+                
+                // Add event handlers
+                utterance.onstart = () => {
+                    this.speaking = true;
+                    this.setState('speaking');
+                };
+                
+                utterance.onend = () => {
+                    this.speaking = false;
+                    this.setState('idle');
+                };
+                
+                utterance.onerror = (event) => {
+                    console.error('Speech synthesis error:', event);
+                    this.speaking = false;
+                    this.setState('error');
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                // Speak the text
+                window.speechSynthesis.cancel(); // Cancel any ongoing speech
+                window.speechSynthesis.speak(utterance);
+            }
+            
+            stopSpeaking() {
+                this.speaking = false;
+                this.setState('idle');
+                this.subtitleDisplay.style.display = 'none';
+                this.updateSubtitle('Ready');
+            }
+            
+            updateSubtitle(text) {
+                this.subtitle.textContent = text;
+                if (text && text !== 'Ready') {
+                    this.subtitleDisplay.textContent = text;
+                    this.subtitleDisplay.style.display = 'block';
+                } else {
+                    this.subtitleDisplay.style.display = 'none';
+                }
+            }
+            
+            updateResponse(text) {
+                // Truncate very long responses
+                const maxLength = this.isFullscreen ? 1000 : 500;
+                if (text.length > maxLength) {
+                    text = text.substring(0, maxLength - 3) + '...';
+                }
+                this.response.textContent = text;
+            }
+            
+            updateDebug(text) {
+                this.debug.textContent = text;
+            }
+        }
+
+        // At the end of your HTML file
+        document.addEventListener('DOMContentLoaded', () => {
+            const nova = new NovaUI();
+        });
+    </script>
+</body>
+</html>
+
+    <div class="subtitle-display" id="subtitle-display"></div>
+
+    <script>
+        class MoodEngine {
+            constructor() {
+                this.mood = "neutral";
+                this.lastUpdate = Date.now();
+                this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+            }
+
+            updateMood(text) {
+                // Simple mood detection based on keywords
+                const happyWords = ['happy', 'joy', 'great', 'wonderful', 'awesome', 'excited'];
+                const sadWords = ['sad', 'unhappy', 'depressed', 'miserable', 'cry'];
+                const curiousWords = ['why', 'how', 'what', 'when', 'where', 'explain', 'tell me'];
+                const playfulWords = ['joke', 'fun', 'laugh', 'play', 'game'];
+                const concernedWords = ['help', 'problem', 'issue', 'worry', 'concern', 'trouble'];
+
+                const lowerText = text.toLowerCase();
+                
+                if (happyWords.some(word => lowerText.includes(word))) {
+                    this.mood = "happy";
+                } else if (sadWords.some(word => lowerText.includes(word))) {
+                    this.mood = "sad";
+                } else if (curiousWords.some(word => lowerText.includes(word))) {
+                    this.mood = "curious";
+                } else if (playfulWords.some(word => lowerText.includes(word))) {
+                    this.mood = "playful";
+                } else if (concernedWords.some(word => lowerText.includes(word))) {
+                    this.mood = "concerned";
+                } else {
+                    // Gradually return to neutral if no specific mood detected
+                    const timeSinceLastUpdate = (Date.now() - this.lastUpdate) / 1000 / 60; // in minutes
+                    if (timeSinceLastUpdate > 5) {
+                        this.mood = "neutral";
+                    }
+                }
+                
+                this.lastUpdate = Date.now();
+                this.updateTint();
+                return this.mood;
+            }
+
+            updateTint() {
+                switch(this.mood) {
+                    case "happy":
+                        this.moodTint = { r: 0, g: 50, b: 0, a: 40 };
+                        break;
+                    case "sad":
+                        this.moodTint = { r: 0, g: 0, b: 50, a: 40 };
+                        break;
+                    case "curious":
+                        this.moodTint = { r: 50, g: 50, b: 0, a: 40 };
+                        break;
+                    case "playful":
+                        this.moodTint = { r: 50, g: 0, b: 50, a: 40 };
+                        break;
+                    case "concerned":
+                        this.moodTint = { r: 50, g: 0, b: 0, a: 40 };
+                        break;
+                    default: // neutral
+                        this.moodTint = { r: 0, g: 0, b: 0, a: 0 };
+                }
+            }
+
+            getCurrentMood() {
+                return this.mood;
+            }
+
+            getResponseFlavor(text) {
+                // Add emojis and stylistic changes based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return `${text} 😊`;
+                    case "sad":
+                        return `${text} 😔`;
+                    case "curious":
+                        return `${text} 🤔`;
+                    case "playful":
+                        return `${text} 😄`;
+                    case "concerned":
+                        return `${text} 😐`;
+                    default:
+                        return text;
+                }
+            }
+
+            getVoiceStyle() {
+                // Return voice parameters based on mood
+                switch(this.mood) {
+                    case "happy":
+                        return { rate: 1.1, pitch: 1.1 };
+                    case "sad":
+                        return { rate: 0.9, pitch: 0.9 };
+                    case "curious":
+                        return { rate: 1.05, pitch: 1.05 };
+                    case "playful":
+                        return { rate: 1.15, pitch: 1.15 };
+                    case "concerned":
+                        return { rate: 0.95, pitch: 0.95 };
+                    default:
+                        return { rate: 1.0, pitch: 1.0 };
+                }
+            }
+        }
+
+        class NovaUI {
+            constructor() {
+                this.isDarkMode = false;
+                this.isFullscreen = false;
+                this.listening = false;
+                this.speaking = false;
+                this.processing = false;
+                this.moodEngine = new MoodEngine();
+                this.recognition = null;
+                this.speechSynthesis = window.speechSynthesis;
+                this.wakeWord = "nova";
+                this.wakeWordActive = false;
+                
+                // DOM elements
+                this.circle = document.getElementById('circle');
+                this.subtitle = document.getElementById('subtitle');
+                this.userTranscript = document.getElementById('user-transcript');
+                this.response = document.getElementById('response');
+                this.debug = document.getElementById('debug');
+                this.moodIndicator = document.getElementById('mood-indicator');
+                this.listenButton = document.getElementById('listen-button');
+                this.subtitleDisplay = document.getElementById('subtitle-display');
+                this.waveform = document.getElementById('waveform');
+                this.processingDots = document.getElementById('processing-dots');
+                this.ripple = document.getElementById('ripple');
+                
+                // Initialize
+                this.initWaveform();
+                this.initProcessingDots();
+                this.initEventListeners();
+                this.initSubtitleDrag();
+                this.initSpeechRecognition();
+                
+                // Start with a welcome message
+                this.updateResponse("Hello, I'm Nova. Ready to help!");
+            }
+            
+            initWaveform() {
+                // Create waveform lines
+                for (let i = 0; i < 50; i++) {
+                    const line = document.createElement('div');
+                    line.className = 'waveform-line';
+                    line.style.height = `${Math.random() * 20 + 10}px`;
+                    this.waveform.appendChild(line);
+                }
+            }
+            
+            initProcessingDots() {
+                // Create processing dots
+                const dotCount = 6;
+                const orbitRadius = 90;
+                
+                for (let i = 0; i < dotCount; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'processing-dot';
+                    const angle = (i * (360 / dotCount));
+                    const x = orbitRadius * Math.cos(angle * Math.PI / 180);
+                    const y = orbitRadius * Math.sin(angle * Math.PI / 180);
+                    
+                    dot.style.transform = `translate(${x}px, ${y}px)`;
+                    this.processingDots.appendChild(dot);
+                }
+            }
+            
+            initEventListeners() {
+                // Theme toggle
+                document.getElementById('theme-toggle').addEventListener('click', () => {
+                    this.toggleTheme();
+                });
+                
+                // Fullscreen toggle
+                document.getElementById('fullscreen-toggle').addEventListener('click', () => {
+                    this.toggleFullscreen();
+                });
+                
+                // Mood selection
+                document.querySelectorAll('.dropdown-content button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const mood = e.target.getAttribute('data-mood');
+                        this.setMood(mood);
+                    });
+                });
+                
+                // Listen button
+                this.listenButton.addEventListener('click', () => {
+                    if (!this.listening && !this.speaking) {
+                        this.startListening();
+                    } else if (this.listening) {
+                        this.stopListening();
+                    }
+                });
+            }
+            
+            initSubtitleDrag() {
+                let isDragging = false;
+                let offsetX, offsetY;
+                
+                this.subtitleDisplay.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    offsetX = e.clientX - this.subtitleDisplay.getBoundingClientRect().left;
+                    offsetY = e.clientY - this.subtitleDisplay.getBoundingClientRect().top;
+                    this.subtitleDisplay.style.cursor = 'grabbing';
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    
+                    this.subtitleDisplay.style.left = `${e.clientX - offsetX}px`;
+                    this.subtitleDisplay.style.top = `${e.clientY - offsetY}px`;
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                    this.subtitleDisplay.style.cursor = 'grab';
+                });
+            }
+            
+            initSpeechRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    this.updateDebug("Speech recognition not supported in this browser");
+                    return;
+                }
+                
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = true;
+                this.recognition.interimResults = true;
+                this.recognition.maxAlternatives = 1;
+                
+                this.recognition.onstart = () => {
+                    this.listening = true;
+                    this.setState('listening');
+                    this.updateDebug("Listening for speech...");
+                };
+                
+                this.recognition.onerror = (event) => {
+                    this.setState('error');
+                    this.updateDebug(`Recognition error: ${event.error}`);
+                    setTimeout(() => this.setState('idle'), 2000);
+                };
+                
+                this.recognition.onend = () => {
+                    if (this.listening && !this.wakeWordActive) {
+                        // If we're still supposed to be listening, restart recognition
+                        this.recognition.start();
+                    }
+                };
+                
+                this.recognition.onresult = (event) => {
+                    let interimTranscript = '';
+                    let finalTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript.trim().toLowerCase();
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    
+                    // Check for wake word in interim results
+                    if (interimTranscript.includes(this.wakeWord) && !this.wakeWordActive) {
+                        this.wakeWordActive = true;
+                        this.updateDebug("Wake word detected!");
+                        this.userTranscript.textContent = "Listening...";
+                        // Add visual indication that wake word was detected
+                        this.setState('listening');
+                        return;
+                    }
+                    
+                    // Update UI with interim results
+                    if (interimTranscript && this.wakeWordActive) {
+                        this.updateUserTranscript(interimTranscript);
+                        // Show active listening state
+                        this.setState('listening');
+                    }
+                    
+                    // Process final results
+                    if (finalTranscript && this.wakeWordActive) {
+                        // Show that we've stopped listening and started processing
+                        this.updateDebug("Processing your request...");
+                        this.setState('processing');
+                        
+                        // Process the input after a small delay to show the transition
+                        setTimeout(() => {
+                            this.processUserInput(finalTranscript);
+                            this.wakeWordActive = false;
+                        }, 300);
+                    }
+                };
+                
+                // Start listening for wake word
+                this.recognition.start();
+            }
+            
+            toggleTheme() {
+                this.isDarkMode = !this.isDarkMode;
+                document.body.classList.toggle('dark-mode', this.isDarkMode);
+                this.updateDebug(`Theme changed to ${this.isDarkMode ? 'dark' : 'light'} mode`);
+            }
+            
+            toggleFullscreen() {
+                if (!this.isFullscreen) {
+                    document.documentElement.requestFullscreen();
+                    document.getElementById('app-container').classList.add('fullscreen');
+                } else {
+                    document.exitFullscreen();
+                    document.getElementById('app-container').classList.remove('fullscreen');
+                }
+                this.isFullscreen = !this.isFullscreen;
+                this.updateDebug(`Fullscreen ${this.isFullscreen ? 'enabled' : 'disabled'}`);
+            }
+            
+            setMood(mood) {
+                this.moodEngine.mood = mood;
+                this.moodEngine.lastUpdate = Date.now();
+                this.moodEngine.updateTint();
+                this.moodIndicator.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+                this.updateDebug(`Mood changed to ${mood}`);
+            }
+            
+            setState(state) {
+                // Reset all states first
+                this.circle.className = 'circle';
+                this.waveform.style.display = 'none';
+                this.processingDots.style.display = 'none';
+                this.ripple.style.display = 'none';
+                
+                // Set the new state
+                this.circle.classList.add(state);
+                
+                switch(state) {
+                    case 'idle':
+                        break;
+                    case 'listening':
+                        this.ripple.style.display = 'block';
+                        break;
+                    case 'speaking':
+                        this.waveform.style.display = 'flex';
+                        this.animateWaveform();
+                        break;
+                    case 'processing':
+                        this.processingDots.style.display = 'block';
+                        break;
+                    case 'error':
+                        break;
+                }
+            }
+            
+            animateWaveform() {
+                const lines = this.waveform.querySelectorAll('.waveform-line');
+                const interval = setInterval(() => {
+                    if (!this.speaking) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    lines.forEach(line => {
+                        line.style.height = `${Math.random() * 20 + 10}px`;
+                    });
+                }, 100);
+            }
+            
+            startListening() {
+                this.wakeWordActive = true;
+                this.updateDebug("Listening for your command...");
+                this.userTranscript.textContent = "Listening...";
+            }
+            
+            stopListening() {
+                this.wakeWordActive = false;
+                this.updateDebug("Stopped listening");
+                this.userTranscript.textContent = "";
+            }
+            
+            updateUserTranscript(text) {
+                this.userTranscript.textContent = `You: ${text}`;
+            }
+            
+            async processUserInput(text) {
+                // Clean up the text by removing the wake word if present
+                const cleanText = text.replace(new RegExp(this.wakeWord, 'gi'), '').trim();
+                if (!cleanText) return;
+                
+                this.updateUserTranscript(cleanText);
+                this.setState('processing');
+                
+                // Start timing
+                const startTime = performance.now();
+                
+                // Update mood based on input
+                this.moodEngine.updateMood(cleanText);
+                const currentMood = this.moodEngine.getCurrentMood();
+                this.moodIndicator.textContent = `Mood: ${currentMood.charAt(0).toUpperCase() + currentMood.slice(1)}`;
+                
+                try {
+                    // Send to Ollama API
+                    const response = await this.queryOllama(cleanText);
+                    
+                    // Calculate processing time
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    
+                    // Update processing time display
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms`;
+                    
+                    this.speak(response);
+                } catch (error) {
+                    const endTime = performance.now();
+                    const processingTime = Math.round(endTime - startTime);
+                    document.getElementById('processing-time').textContent = `Processing: ${processingTime}ms (Error)`;
+                    
+                    this.setState('error');
+                    this.updateDebug(`Error: ${error.message}`);
+                    this.updateResponse("Sorry, I encountered an error processing your request.");
+                    setTimeout(() => this.setState('idle'), 2000);
+                }
+            }
+            
+            async queryOllama(prompt) {
+                this.updateDebug("Processing with Ollama...");
+                
+                // Replace with your actual Ollama API endpoint
+                const ollamaUrl = 'http://localhost:11434/api/generate';
+                
+                const response = await fetch(ollamaUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'mistral',
+                        prompt: prompt,
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ollama API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.response;
+            }
+
+            updateResponse(text) {
+                this.response.textContent = text;
+            }
+
+            updateDebug(text) {
+                this.debug.textContent = text;
+            }
+        }

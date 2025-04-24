@@ -1,0 +1,152 @@
+:root {
+    --primary-color: #FFD166;
+    --text-color: #1a1a1a;
+    --background-color: #ffffff;
+    --button-bg: #e5e7eb;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+.app-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-bar {
+    display: flex;
+    justify-content: flex-start;
+    padding: 1rem;
+    gap: 1rem;
+}
+
+.nav-item {
+    background: none;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.circle {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2rem;
+    font-size: 1rem;
+}
+
+.text-display {
+    text-align: center;
+    margin: 2rem 0;
+}
+
+.user-transcript {
+    margin: 0.5rem 0;
+    font-size: 1rem;
+}
+
+.response {
+    margin: 0.5rem 0;
+    color: #22c55e;
+    font-size: 1rem;
+}
+
+.debug {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+}
+
+.mood-indicator {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+}
+
+.button-container {
+    display: flex;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.button {
+    width: 40px;
+    height: 40px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.button:hover {
+    transform: scale(1.1);
+}
+
+.button.square {
+    background-color: var(--button-bg);
+    border-radius: 4px;
+}
+
+.button.circle {
+    background-color: var(--primary-color);
+    border-radius: 50%;
+}
+
+.button.x {
+    background-color: var(--button-bg);
+    border-radius: 4px;
+    position: relative;
+}
+
+.button.x::before,
+.button.x::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 2px;
+    background-color: var(--text-color);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.button.x::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+
+.processing-time {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    z-index: 1000;
+}
+
+.dark-mode .processing-time {
+    background-color: rgba(255, 255, 255, 0.1);
+}

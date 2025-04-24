@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "AI Voice Assistant",
+  "version": "1.0",
+  "description": "A voice-controlled AI assistant",
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "logo192.png",
+      "48": "logo192.png",
+      "128": "logo512.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content-script.js"]
+    }
+  ],
+  "permissions": [
+    "tts",
+    "storage",
+    "activeTab"
+  ],
+  "icons": {
+    "16": "logo192.png",
+    "48": "logo192.png",
+    "128": "logo512.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
